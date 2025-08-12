@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.env
+.venv
+venv/
+env/
+myenv/
+pip-wheel-metadata/
+*.log
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Virtual environments inside project
+Py_Backend/RAG-chatbot/myenv/
+Py_Backend/RAG-chatbot/venv/
+
+# Docs (uncomment if you want to ignore)
+Py_Backend/RAG-chatbot/docs/
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+Python_Backend/Py_Backend/Dev_bot/Dev_bot/RAG-chatbot/RAG_Model/docs/
+Python_Backend/Py_Backend/Dev_bot/Dev_bot/RAG-chatbot/docs/
