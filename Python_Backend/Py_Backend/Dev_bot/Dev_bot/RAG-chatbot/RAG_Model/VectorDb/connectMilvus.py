@@ -31,7 +31,7 @@ try:
         # 2. Define schema
     fields = [
           FieldSchema(name="id", dtype=DataType.VARCHAR, is_primary=True, auto_id=False, max_length=36),
-          FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=384),  # Adjust dim if needed
+          FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=768),  # Adjust dim if needed
           FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=65535),
           FieldSchema(name="doc_name", dtype=DataType.VARCHAR,max_length=255),
           FieldSchema(name="doc_id", dtype=DataType.VARCHAR, max_length=64),  # Important: searchable filter

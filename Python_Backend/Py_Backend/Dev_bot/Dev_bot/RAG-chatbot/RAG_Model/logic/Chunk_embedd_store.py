@@ -37,18 +37,6 @@ def split_and_group_chunks(texts, bge, chunk_size=1000, threshold=0.9):
     return grouped
 
 
-# def find_most_similar_chunks(query_embedding, chunk_embeddings, chunks, k=3):
-#     similarities = []
-#     query_embedding = np.array(query_embedding)
-#     for chunk_embedding in chunk_embeddings:
-#         chunk_embedding = np.array(chunk_embedding)
-#         similarity = np.dot(query_embedding, chunk_embedding) / (
-#             np.linalg.norm(query_embedding) * np.linalg.norm(chunk_embedding)
-#         )
-#         similarities.append(similarity)
-#     top_k_indices = np.argsort(similarities)[-k:][::-1]
-#     return [chunks[i] for i in top_k_indices]
-
 def search_similar_chunks_multi(
     query: str,
     collection,
@@ -88,12 +76,7 @@ def search_similar_chunks_multi(
         safe_list = ",".join(f'"{d}"' for d in doc_id)
         expr = f'doc_id in [{safe_list}]'
 
-    # 3) Perform the search
-    #    Make sure your collection schema includes these metadata fields:
-    #      - "chunk"     (or "text"): VARCHAR containing the chunk text
-    #      - "doc_id":   VARCHAR, your document identifier
-    #      - "doc_name": VARCHAR, the PDF filename
-    #      - "page":     INT64, the page number
+
     results = collection.search(
         data=[query_emb],
         anns_field="embedding",
@@ -117,35 +100,58 @@ def search_similar_chunks_multi(
     return output
 
 
-def section_based_chunker(text, min_len=200):
+def section_based_chunker(text, min_len=500, max_len=2000):
     """
     Splits document text into chunks by detecting section headers,
     falls back to paragraph-based split if not found.
+    Optimized for better chunk sizes to reduce total number of chunks.
     """
     # Regex: Match lines that look like headings (all caps, or start with "Section", or numbered, etc)
     pattern = re.compile(r'^(?:[A-Z][A-Z \d\.\-:]{5,}|Section\s+\d+|[IVXLC]+\.\s)', re.MULTILINE)
     matches = list(pattern.finditer(text))
     chunks = []
+    
     if not matches:
-        # Fallback: split by paragraphs
+        # Fallback: split by paragraphs with better size control
         paras = text.split('\n\n')
         buf = ''
         for para in paras:
-            buf += para + '\n\n'
-            if len(buf) > min_len:
-                chunks.append(buf.strip())
-                buf = ''
-        if buf:
+            para = para.strip()
+            if not para:
+                continue
+                
+            # If adding this paragraph would exceed max_len, save current buffer
+            if buf and len(buf) + len(para) + 2 > max_len:
+                if len(buf) >= min_len:
+                    chunks.append(buf.strip())
+                buf = para
+            else:
+                buf += ('\n\n' + para) if buf else para
+                
+        if buf and len(buf) >= min_len:
             chunks.append(buf.strip())
     else:
-        # Cut sections by heading positions
+        # Cut sections by heading positions with size optimization
         for i, m in enumerate(matches):
             start = m.start()
             end = matches[i+1].start() if i+1 < len(matches) else len(text)
             chunk = text[start:end].strip()
-            if len(chunk) > min_len:
+            
+            # If chunk is too small, try to combine with next chunk
+            if len(chunk) < min_len and i + 1 < len(matches):
+                next_start = matches[i+1].start()
+                next_end = matches[i+2].start() if i+2 < len(matches) else len(text)
+                combined_chunk = text[start:next_end].strip()
+                if len(combined_chunk) <= max_len:
+                    chunk = combined_chunk
+                    # Skip next iteration since we processed it
+                    i += 1
+            
+            if len(chunk) >= min_len:
                 chunks.append(chunk)
+    
     return chunks
+
 
 def add_overlap(chunks, overlap_sentences=2):
     overlapped_chunks = []
@@ -165,7 +171,7 @@ def get_embeddings(chunks:list[str], bge) -> list[np.ndarray]:
 
 import uuid
 
-def insert_into_vector_db(doc_id, title, chunks, embeddings, Page):
+def insert_into_vector_db(doc_id, title, chunks, embeddings, page_numbers):
     if len(chunks) != len(embeddings):
         print(f"[VectorDB Insert Error] Chunks: {len(chunks)} | Embeddings: {len(embeddings)}")
         for i, c in enumerate(chunks):
@@ -186,7 +192,7 @@ def insert_into_vector_db(doc_id, title, chunks, embeddings, Page):
         [title] * len(chunks),  # doc_name
         [doc_id] * len(chunks),# "doc_id"
         chunk_indices,         # "chunk_index"
-        page        # "page"
+        page_numbers  # "page"
     ]
 
      # ✅ Instantiate collection first

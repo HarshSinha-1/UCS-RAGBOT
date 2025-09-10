@@ -17,7 +17,7 @@ OR_client = ORClient(
     base_url="https://openrouter.ai/api/v1"
 )
 
-bge = SentenceTransformer("BAAI/bge-small-en-v1.5")
+bge = SentenceTransformer("sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
 
 
 

@@ -16,6 +16,7 @@ from typing import List, Tuple, Dict, Any
 from pymilvus import Collection, MilvusException
 import logging
 import time
+from langdetect import detect
 
 
 
@@ -26,7 +27,11 @@ import time
 # --- Main Q&A Pipeline ---
 logger = logging.getLogger(__name__)
 
-def insert_in_batches(collection, records, batch_size=200):
+def insert_in_batches(collection, records, batch_size=64):
+    """
+    Insert records in smaller batches to avoid HTTP 413 errors.
+    Reduced batch size and added chunk size validation.
+    """
     total = len(records)
     logger.info("Inserting %d records in batches of %d", total, batch_size)
 
@@ -102,7 +107,7 @@ def process_pdf_for_doc(file_path: str, doc_id: str, title: str, embedder, colle
 
     embeddings = embedder.encode(
      all_chunks,
-     batch_size=32,
+     batch_size=64,
      normalize_embeddings=True,
      show_progress_bar=True
     )
@@ -130,191 +135,11 @@ def process_pdf_for_doc(file_path: str, doc_id: str, title: str, embedder, colle
     collection_name="rag_chunks1"    
     collection = Collection(name=collection_name)
     # … build your records list …
-    insert_in_batches(collection, records, batch_size=200)
+    insert_in_batches(collection, records, batch_size=64)
 
 
     print(f"✅ Inserted {len(all_chunks)} chunks into vector DB for doc_id: {doc_id}")
 
-
-    # # Final insertion to Milvus
-    # insert_into_vector_db(
-    #     embeddings=embeddings,
-    #     text=all_chunks,
-    #     title=doc_name, 
-    #     doc_id=doc_id, # or doc_name if preferred
-    #     page=all_pages
-    # )
-
-    # print(f"✅ Finished processing and storing chunks for doc_id: {doc_id}")
-
-
-# def process_pdf_for_doc(pdf_path: str, doc_id: str, title: str , embedder, collection):
-
-#     # Step 1: Load ONLY the target file, not the entire directory
-#     raw_docs = load_documents(Path(pdf_path).parent)  # ✅ fix: don't load entire folder
-#     if not raw_docs or not any(text.strip() for text in raw_docs):
-#         raise ValueError("Document is empty or contains no readable text")
-
-#     combined = "\n".join(raw_docs).strip()
-#     chunks: List[str] = section_based_chunker(combined)
-
-#     if not combined:
-#         raise ValueError("Combined text is empty after cleaning")
-
-#     chunks = section_based_chunker(combined)
-#     if not chunks:
-#         raise ValueError("No chunks could be created from the document")
-
-#     # Optional: filter out empty chunks explicitly
-#     chunks = [c.strip() for c in chunks if c.strip()]
-    
-#     chunks = list(dict.fromkeys(chunks))  # ✅ remove any duplicate chunks
-
-#     # Step 3: Add sentence-level overlap across chunks
-#     chunks = add_overlap(chunks, overlap_sentences=2)  # ✅ enable overlap for better embeddings
-
-#     # Step 4: Get embeddings for each chunk
-#     embeddings: List[np.ndarray] = get_embeddings(chunks, embedder)
-
-#     # Safety check
-#     if len(chunks) != len(embeddings):
-#         raise ValueError(f"Mismatch: {len(chunks)} chunks vs {len(embeddings)} embeddings")
-
-#     # Optional: Debug
-#     for i in range(len(chunks)):
-#         print(f"[{i}] Chunk preview: {chunks[i][:80]!r}")
-#         print(f"[{i}] Embedding dims preview: {embeddings[i][:3]}")
-
-#     # Step 5: Insert into Milvus vector DB
-#     insert_into_vector_db(embeddings=embeddings,
-#                          text=chunks,
-#                          title=title,
-#                          doc_id=doc_id
-#                          )
-
-#     print(f"✅ Finished processing and storing chunks for doc_id: {doc_id}")
-
- 
-# def process_query(query, bge, ORClient):
-
-#     docs_dir = ensure_docs_directory()
-#     documents = load_documents(docs_dir)
-#     if not documents:
-#         print("No documents found. Please upload first.")
-#         return {'status': 'error', 'message': 'No documents found. Please upload first.'}
-
-#     # Chunking
-#     all_text = '\n'.join(documents)
-#     chunks = section_based_chunker(all_text)
-#     if not chunks:
-#         print("Document chunking failed.")
-#         return {'status': 'error', 'message': 'Document chunking failed.'}
-
-#     # Embedding
-#     chunk_embeddings = bge.encode(chunks, batch_size=32, normalize_embeddings=True)
-#     query_embedding = bge.encode([query], normalize_embeddings=True)[0]
-#     # ----- Milvus INSERT LOGIC -----
-#     # If you have only 1 file, get doc_name from docs_dir; else, you can pass a list.
-#     # doc_name = None
-#     # doc_files = list(docs_dir.glob('*'))
-#     # if len(doc_files) == 1:
-#     #     doc_name = doc_files[0].name
-#     # else:
-#     #     doc_name = "unknown"
-
-#     # # Generate data for insertion
-#     # chunk_ids = [str(uuid.uuid4()) for _ in chunks]      # Use UUID as string
-#     # pages = [0 for _ in chunks]                          # Or your real page numbers
-
-#     # insert_data = [
-#     #     chunk_ids,                                        # "ID"
-#     #     [vec.tolist() if hasattr(vec, 'tolist') else vec for vec in chunk_embeddings],  # "embedding"
-#     #     chunks,                                           # "text"
-#     #     [doc_name] * len(chunks),                         # "doc_name"
-#     #     pages                                             # "page"
-#     # ]
-
-#     # collection.insert(insert_data)
-#     # print(f"✅ Inserted {len(chunks)} chunks for document '{doc_name}' into Milvus.")
-
-#     # # ---------- Retrieval for Query ----------
-#     # query_embedding = bge.encode([query], normalize_embeddings=True)[0]
-#     # # Milvus similarity search
-#     # search_params = {"metric_type": "COSINE", "params": {"nprobe": 16}}
-#     # results = collection.search(
-#     #     data=[query_embedding],
-#     #     anns_field="embedding",
-#     #     param=search_params,
-#     #     limit=3,
-#     #     output_fields=["text", "doc_name", "page"]
-#     # )
-
-#     # relevant_chunks = [hit.entity.get('text') for hit in results[0] if hit.distance > 0.5]
-#     # Context = "\n".join(relevant_chunks)
-#     # print("\n--- RAG Context ---\n", Context[:3000])
-    
-#     similarities = np.dot(chunk_embeddings, query_embedding)
-#     top_k_indices = similarities.argsort()[-3:][::-1]
-#     relevant_chunks = [chunks[i] for i in top_k_indices if similarities[i] > 0.5]  # Only keep semi-relevant chunks
-#     Context = "\n".join(relevant_chunks)
-
-#     print("\n--- RAG Context ---\n", Context[:3000])
-
-#     if not Context.strip():
-#         return {
-#             'status': 'error',
-#             'message': "No relevant content found for your query in the uploaded documents."
-#         }
-
-#     # ---------- LLM Prompt/Inference ----------
-#     Prompt = f"""You are a smart AI agent provided with two things: a CONTEXT and a USER QUESTION.
-# Your task is to answer the user's question as accurately as possible, using ONLY information from the context.
-
-# Return your answer as a JSON array.
-# - Each array item must have a 'name' (short, clear label) and a 'description' (detailed explanation, as feasible from the context).
-# - Group together any points that are similar.
-# - Do NOT invent or assume any information.
-# - If nothing relevant is found, return [] only, with no further explanation.
-
-# Context:
-# {Context}
-
-# Question:
-# {query}
-
-# Format:
-# [
-#   {{
-#     "name": "Short label for point",
-#     "description": "Detailed explanation of the point, with as much detail as available in the context."
-#   }}
-# ]
-
-# Your answer:
-# """
-
-#     chat_response = ORClient.chat.completions.create(
-#         model="deepseek/deepseek-chat-v3:free",
-#         messages=[
-#             {"role": "system", "content": "You are a helpful assistant that always returns valid JSON arrays and nothing else."},
-#             {"role": "user", "content": Prompt}
-#         ],
-#         temperature=0.0,
-#     )
-#     answer_text = chat_response.choices[0].message.content
-#     print("\n--- Model Raw Output ---\n", answer_text)
-
-#     try:
-#         json_start = answer_text.find("[")
-#         json_end = answer_text.rfind("]") + 1
-#         json_string = answer_text[json_start:json_end]
-#         parsed_answer = json.loads(json_string)
-#     except Exception:
-#         return {
-#             'status': 'error',
-#             'message': f"Failed to parse AI response as JSON. Model output: {answer_text}"
-#         }
-#     return {'status': 'success', 'answer': parsed_answer}
 
 def process_query(
     query: str,
@@ -324,6 +149,13 @@ def process_query(
     collection,
     top_k: int = 5
 ) -> Dict[str, Any]:
+    
+    # 🔹 1) Detect language of query
+    try:
+        detected_lang = detect(query)
+    except Exception:
+        detected_lang = "en"   # fallback to English if detection fails
+
     """
     1) Searches for top_k similar chunks across the given doc_id list
     2) Builds a labeled context with chunk text + (file_name, page_no)
@@ -352,10 +184,15 @@ def process_query(
     context = "\n\n---\n\n".join(context_lines)
 
     # 3) craft the prompt
-    Prompt = f"""You are an intelligent AI assistant designed to provide factual, insightful, and context-grounded answers based strictly on the provided CONTEXT.
+    Prompt = f"""You are an multilingual intelligent AI assistant designed to provide factual, insightful, and context-grounded answers based strictly on the provided CONTEXT.
 
 ## Your Objective:
 Use the CONTEXT to answer the USER QUESTION in the most *comprehensive, **insightful, and **information-rich* manner possible. Only use information *explicitly* found in the context. Do NOT make assumptions or add external knowledge.
+
+## Important:
+- The USER QUESTION is written in language code: "{detected_lang}".
+- Always return your answer **in the same language as the USER QUESTION**.
+- Do not translate sources; keep file_name and page_no unchanged.
 
 ## Output Format:
 Return your response as a JSON array, where each item has the following structure:
@@ -368,7 +205,8 @@ Return your response as a JSON array, where each item has the following structur
     • "file_name": string – the name of the source file
     • "page_no": int – the page number where the information was found
 
-If the context does not contain enough information to answer the question, return an *empty array []* — with no other output or explanation.
+⚠️ Important: If the context does not contain enough information to answer, then return exactly: 
+*["No context found for your query, please rephrase or upload more documents."]* — with no other output or explanation.
 
 ## CONTEXT:
 {context}
@@ -443,7 +281,8 @@ If the context does not contain enough information to answer the question, retur
         return {
             "status": "success",
             "answer": parsed,
-            "sources": unified_sources
+            "sources": unified_sources,
+            "language": detected_lang
         }
 
     except Exception as e:
@@ -453,23 +292,3 @@ If the context does not contain enough information to answer the question, retur
             "message": f"{e}\nRaw LLM output:\n{answer_text if 'answer_text' in locals() else ''}"
         }
     
-    # ✅ Extract full JSON block (more flexible)
-    #  json_array_match = re.search(r'\[\s*{[\s\S]*?}\s*\]', answer_text)
-    #  if not json_array_match:
-    #     raise ValueError("No JSON array found in model response.")
-        
-    #  json_string = json_array_match.group(0)
-        
-    #  try:
-    #     parsed_answer = json5.loads(json_string)
-    #  except Exception:
-    #         # Try to parse with json5 which is more lenient
-    #     parsed_answer = json5.loads(json_string)
-
-    #  return {'status': 'success', 'answer': parsed_answer}
-
-    # except Exception as e:
-    #  return {
-    #         'status': 'error',
-    #         'message': f"Failed to parse AI response as JSON.\nError: {e}\nRaw Model Output:\n{answer_text}"
-    #     }
