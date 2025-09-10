@@ -56,10 +56,20 @@ export async function createTables() {
       title TEXT,
       uploaded_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
       uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-    
-    `);
-
+    );
+   `);
+   await pool.query(`
+   CREATE TABLE IF NOT EXISTS chatRecords (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    doc_ids UUID[], 
+    query TEXT,
+    response TEXT,
+    language VARCHAR(10),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+   );
+  `);
+ 
     console.log('Tables created or already exist');
   } catch (error: any) {
     console.error('Error creating tables:', error.message);

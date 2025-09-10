@@ -145,3 +145,11 @@ export async function getUserDetailbyID(userId: number) {
   );
   return result.rows[0];
 }
+
+export async function saveChatRecord(user_id: number, doc_id: string[], query: string,response: any, language:string) {
+  const result = await pool.query(
+    'INSERT INTO chatRecords (user_id, doc_ids, query, response, language) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+    [user_id, doc_id, query, response, language]
+  );
+  return result.rows[0];
+}
