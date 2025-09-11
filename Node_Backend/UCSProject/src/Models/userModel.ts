@@ -153,3 +153,11 @@ export async function saveChatRecord(user_id: number, doc_id: string[], query: s
   );
   return result.rows[0];
 }
+
+export async function fetchChatRecordsByDate(date: string) {
+  const result = await pool.query(
+    'SELECT * FROM chatRecords WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at DESC',
+    [date + ' 00:00:00', date + ' 23:59:59']
+  );
+  return result.rows;
+}

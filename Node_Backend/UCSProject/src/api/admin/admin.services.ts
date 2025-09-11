@@ -3,7 +3,7 @@ import multer from 'multer';
 import axios from 'axios';
 import FormData from 'form-data';
 import fs from 'fs';
-import { insertDocument,deleteDocumentFromDB } from '../../Models/userModel';
+import { insertDocument,deleteDocumentFromDB, fetchChatRecordsByDate } from '../../Models/userModel';
 import { v4 as uuidv4 } from 'uuid';
 //import { authenticate, authorizeRoles } from '../middlewares/auth'
 
@@ -97,4 +97,49 @@ export async function deleteDocument(req: Request, res: Response): Promise<void>
   }
 }
 
+// Get all chat records filtered by a specific date
+export async function getAllChats(req: Request, res: Response): Promise<void> {
+  try {
+    const dateParam = req.body.date as string;
 
+    if (!dateParam) {
+      res.status(400).json({
+        success: false,
+        message: 'Date parameter is required in format YYYY-MM-DD'
+      });
+      return;
+    }
+
+    // Parse the date and define the start and end of the day
+    const date = new Date(dateParam);
+    if (isNaN(date.getTime())) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Use YYYY-MM-DD'
+      });
+      return;
+    }
+
+    const result = await fetchChatRecordsByDate(dateParam);
+
+    if (result.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'No chat records found for the specified date'
+      });
+      return;
+    }
+         
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Error fetching chats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch chat records'
+    });
+  }
+}
