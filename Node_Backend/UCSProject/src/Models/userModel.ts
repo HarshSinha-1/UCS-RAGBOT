@@ -161,3 +161,18 @@ export async function fetchChatRecordsByDate(date: string) {
   );
   return result.rows;
 }
+
+export async function saveUnansweredQuery(queryData: { query: string; user_id: number; language: string }) {
+  const result = await pool.query(
+    'INSERT INTO unanswered_queries (query, user_id, language, timestamp) VALUES ($1, $2, $3, NOW()) RETURNING *',
+    [queryData.query, queryData.user_id, queryData.language]
+  );
+  return result.rows[0];
+}
+
+export async function fetchUnansweredQueries() {
+  const result = await pool.query(
+    'SELECT uq.id, uq.query, uq.language, uq.timestamp, u.username, u.email FROM unanswered_queries uq JOIN users u ON uq.user_id = u.id ORDER BY uq.timestamp DESC'
+  );
+  return result.rows;
+}

@@ -69,6 +69,17 @@ export async function createTables() {
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
    );
   `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS unanswered_queries (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        query TEXT,
+        language VARCHAR(10),
+        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
  
     console.log('Tables created or already exist');
   } catch (error: any) {

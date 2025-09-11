@@ -3,7 +3,7 @@ import multer from 'multer';
 import axios from 'axios';
 import FormData from 'form-data';
 import fs from 'fs';
-import { insertDocument,deleteDocumentFromDB, fetchChatRecordsByDate } from '../../Models/userModel';
+import { insertDocument,deleteDocumentFromDB, fetchChatRecordsByDate, fetchUnansweredQueries } from '../../Models/userModel';
 import { v4 as uuidv4 } from 'uuid';
 //import { authenticate, authorizeRoles } from '../middlewares/auth'
 
@@ -121,6 +121,34 @@ export async function getAllChats(req: Request, res: Response): Promise<void> {
     }
 
     const result = await fetchChatRecordsByDate(dateParam);
+
+    if (result.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'No chat records found for the specified date'
+      });
+      return;
+    }
+         
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Error fetching chats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch chat records'
+    });
+  }
+}
+
+
+export async function getfailedchat(req: Request, res: Response): Promise<void> {
+  try {
+    
+    const result = await fetchUnansweredQueries();
 
     if (result.length === 0) {
       res.status(404).json({

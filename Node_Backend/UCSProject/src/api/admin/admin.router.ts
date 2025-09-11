@@ -1,5 +1,5 @@
 import express from 'express';
-import { handleDocumentUpload , deleteDocument, getAllChats } from '../admin/admin.services';
+import { handleDocumentUpload , deleteDocument, getAllChats, getfailedchat } from '../admin/admin.services';
 import { AdminAuthenticate } from '../../middlewares/auth.middleware'; 
 import { uploadMiddleware } from '../../middlewares/uploadMiddleware';
 
@@ -19,7 +19,9 @@ Adminrouter.delete(
   deleteDocument
 );
 
-Adminrouter.get('/chats', AdminAuthenticate, getAllChats);
+Adminrouter.post('/allchats', AdminAuthenticate, getAllChats);
+
+Adminrouter.get('/failed-queries', AdminAuthenticate, getfailedchat);
 
 
 export default Adminrouter;
