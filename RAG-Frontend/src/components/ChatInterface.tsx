@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, FileText, Bot, User, Plus, MoreHorizontal, Sun, Moon, MessageSquare, Bookmark, LogOut, Settings, Palette, ThumbsUp, ThumbsDown, Copy, Check, CheckCircle } from 'lucide-react';
+import { Send, FileText, Bot, User, Plus, MoreHorizontal, Sun, Moon, MessageSquare, Bookmark, LogOut, Settings, Palette, ThumbsUp, ThumbsDown, Copy, Check, CheckCircle, Mic, MicOff, Volume2 } from 'lucide-react';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
@@ -74,6 +74,15 @@ const ChatBot = () => {
   // Add state for documents sidebar visibility
   const [showDocumentsSidebar, setShowDocumentsSidebar] = useState(true);
 
+  // Voice-to-text states
+  const [isRecording, setIsRecording] = useState(false);
+  // Type for SpeechRecognition from window object
+  type SpeechRecognitionType = typeof window extends { webkitSpeechRecognition: infer T } ? T : any;
+  const [recognition, setRecognition] = useState<SpeechRecognitionType | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [recordingError, setRecordingError] = useState<string>('');
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const scrollToBottom = () => {
@@ -83,6 +92,101 @@ const ChatBot = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      
+      if (SpeechRecognition) {
+        setSpeechSupported(true);
+        const recognitionInstance = new SpeechRecognition();
+        
+        recognitionInstance.continuous = true;
+        recognitionInstance.interimResults = true;
+        recognitionInstance.lang = 'en-US';
+
+        recognitionInstance.onstart = () => {
+          setIsListening(true);
+          setRecordingError('');
+        };
+
+        recognitionInstance.onresult = (event: any) => {
+          let finalTranscript = '';
+          let interimTranscript = '';
+
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript;
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+
+          if (finalTranscript) {
+            setInputValue(prev => prev + finalTranscript);
+          }
+        };
+
+        recognitionInstance.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          setRecordingError(`Error: ${event.error}`);
+          setIsRecording(false);
+          setIsListening(false);
+        };
+
+        recognitionInstance.onend = () => {
+          setIsListening(false);
+          if (isRecording) {
+            // Restart recognition if we're still in recording mode
+            setTimeout(() => {
+              if (isRecording) {
+                recognitionInstance.start();
+              }
+            }, 100);
+          }
+        };
+
+        setRecognition(recognitionInstance);
+      } else {
+        setSpeechSupported(false);
+        console.warn('Speech recognition not supported in this browser');
+      }
+    }
+  }, [isRecording]);
+
+  // Voice recording functions
+  const startRecording = () => {
+    if (recognition && speechSupported) {
+      setIsRecording(true);
+      setRecordingError('');
+      try {
+        recognition.start();
+      } catch (error) {
+        console.error('Error starting recognition:', error);
+        setRecordingError('Failed to start recording');
+        setIsRecording(false);
+      }
+    } else {
+      setRecordingError('Speech recognition not supported');
+    }
+  };
+
+  const stopRecording = () => {
+    if (recognition) {
+      setIsRecording(false);
+      recognition.stop();
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
 
   // Fetch documents from API
   const fetchDocuments = async () => {
@@ -461,6 +565,20 @@ const ChatBot = () => {
                 UCS Chatbot
               </h2>
               <div className="flex items-center space-x-2">
+                {/* Voice recognition status */}
+                {speechSupported && (
+                  <div className="flex items-center space-x-2">
+                    {isRecording && (
+                      <div className="flex items-center space-x-1">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs text-red-500">Recording</span>
+                      </div>
+                    )}
+                    {recordingError && (
+                      <span className="text-xs text-red-500">{recordingError}</span>
+                    )}
+                  </div>
+                )}
                 <MoreHorizontal size={20} className={themeClasses.secondaryText} />
               </div>
             </div>
@@ -485,6 +603,9 @@ const ChatBot = () => {
                   <Bot size={48} className="mx-auto mb-4 text-emerald-500" />
                   <p className={`text-lg font-medium mb-2 ${themeClasses.text}`}>Welcome to UCS Chatbot</p>
                   <p className="text-sm">Select documents and start asking questions!</p>
+                  {!speechSupported && (
+                    <p className="text-xs mt-2 text-yellow-400">Voice input not supported in this browser</p>
+                  )}
                   {selectedDocuments.length === 0 ? (
                     <p className="text-xs mt-2 text-red-400">Please select at least one document to start chatting.</p>
                   ) : (
@@ -530,6 +651,23 @@ const ChatBot = () => {
                           disabled={selectedDocuments.length === 0}
                         />
                       </div>
+                      
+                      {/* Voice Input Button */}
+                      {speechSupported && (
+                        <button
+                          onClick={toggleRecording}
+                          disabled={selectedDocuments.length === 0}
+                          className={`p-3 rounded-lg transition-colors flex items-center justify-center ${
+                            isRecording
+                              ? 'bg-red-600 hover:bg-red-700 text-white'
+                              : 'bg-gray-600 hover:bg-gray-700 disabled:bg-gray-600 disabled:opacity-50 text-white'
+                          }`}
+                          title={isRecording ? 'Stop recording' : 'Start voice input'}
+                        >
+                          {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                        </button>
+                      )}
+
                       <button
                         onClick={handleSendMessage}
                         disabled={!inputValue.trim() || isLoading || selectedDocuments.length === 0}
@@ -544,7 +682,11 @@ const ChatBot = () => {
             ) : (
               messages.map((message) => (
                 <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
-                  <div className={`flex ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'} w-full`}>
+                  <div 
+                    className={`flex ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'} w-full`}
+                    onMouseEnter={() => setHoveredMessage(message.id)}
+                    onMouseLeave={() => setHoveredMessage(null)}
+                  >
                     <div className={`flex-shrink-0 ${message.type === 'user' ? 'ml-2' : 'mr-2'}`}>
                       {message.type === 'user' ? (
                         <div className="w-8 h-8 bg-[#7aa2f7] rounded-full flex items-center justify-center">
@@ -561,16 +703,16 @@ const ChatBot = () => {
                       )}
                     </div>
                     <div className={`flex-1 ${message.type === 'user' ? 'flex justify-end' : 'w-full'}`}> {/* user: compact, bot: full width */}
-                                              <div
-                          className={`p-4 rounded-xl relative group animate-in fade-in duration-300 ${
-                            message.type === 'user'
-                              ? `${themeClasses.messageUser} rounded-br-md inline-block`
-                              : message.type === 'error'
-                              ? `${themeClasses.messageError} rounded-bl-md`
-                              : message.type === 'system'
-                              ? `${themeClasses.messageSystem} rounded-bl-md`
-                              : `${themeClasses.messageBot} rounded-bl-md w-full shadow-none`
-                          }`}
+                      <div
+                        className={`p-4 rounded-xl relative group animate-in fade-in duration-300 ${
+                          message.type === 'user'
+                            ? `${themeClasses.messageUser} rounded-br-md inline-block`
+                            : message.type === 'error'
+                            ? `${themeClasses.messageError} rounded-bl-md`
+                            : message.type === 'system'
+                            ? `${themeClasses.messageSystem} rounded-bl-md`
+                            : `${themeClasses.messageBot} rounded-bl-md w-full shadow-none`
+                        }`}
                         style={{ boxShadow: message.type === 'user' ? '0 2px 8px 0 #0002' : 'none' }}
                       >
                         <div className="text-base whitespace-pre-wrap leading-relaxed">
@@ -753,19 +895,33 @@ const ChatBot = () => {
                   style={{ minHeight: '36px', maxHeight: '120px' }}
                   disabled={selectedDocuments.length === 0}
                 />
-                <button
-                  className="p-2 rounded-full hover:bg-[#18181b] transition-colors"
-                  title="Voice input (not implemented)"
-                  disabled
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#a6adc8]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18v2m0 0a4 4 0 01-4-4h8a4 4 0 01-4 4zm0 0v-2m0 0a4 4 0 01-4-4V7a4 4 0 018 0v5a4 4 0 01-4 4z" /></svg>
-                </button>
+                
+                {/* Voice Input Button */}
+                {speechSupported && (
+                  <button
+                    onClick={toggleRecording}
+                    disabled={selectedDocuments.length === 0}
+                    className={`p-2 rounded-full transition-colors ${
+                      isRecording
+                        ? 'bg-red-600 hover:bg-red-700 text-white'
+                        : 'hover:bg-[#18181b]'
+                    }`}
+                    title={isRecording ? 'Stop voice input' : 'Start voice input'}
+                  >
+                    {isRecording ? (
+                      <MicOff size={20} className="text-white" />
+                    ) : (
+                      <Mic size={20} className="text-[#a6adc8]" />
+                    )}
+                  </button>
+                )}
+
                 <button
                   className="p-2 rounded-full hover:bg-[#18181b] transition-colors"
                   title="Waveform (not implemented)"
                   disabled
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#a6adc8]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12h2m4 0h2m4 0h2m-6 0v6m0-6V6" /></svg>
+                  <Volume2 size={20} className="text-[#a6adc8]" />
                 </button>
                 <button
                   onClick={handleSendMessage}
